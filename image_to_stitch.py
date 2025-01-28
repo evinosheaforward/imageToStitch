@@ -296,26 +296,33 @@ def parse_args():
         "--num_clusters",
         type=int,
         default=24,
-        help="Number of color clusters (shapes)",
+        help="Number of color clusters",
     )
     parser.add_argument(
-        "-s", "--cell_size", type=int, default=10, help="Size of each cell in pixels"
+        "-s",
+        "--cell_size",
+        type=int,
+        default=10,
+        help="Size of each cell in pixels, when editing the pattern.",
     )
     parser.add_argument(
         "-g",
         "--grid_line_width",
         type=int,
         default=1,
-        help="Width of grid lines in pixels",
+        help="Width of grid lines in pixels, when editing the pattern",
     )
     parser.add_argument(
-        "--max_width", type=int, default=0, help="Maximum width of the image in pixels"
-    )
-    parser.add_argument(
-        "--max_height",
+        "--width",
         type=int,
         default=0,
-        help="Maximum height of the image in pixels",
+        help="Resize the image to the specified width before generating the pattern",
+    )
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=0,
+        help="Resize the image to the specified height before generating the pattern",
     )
     return parser.parse_args()
 

@@ -34,8 +34,8 @@ There are additional arguments for:
 Full help output from `python image_to_stitch.py -h`
 
 ```
-usage: image_to_stitch.py [-h] [-o OUTPUT_PATH] [-n NUM_CLUSTERS] [-s CELL_SIZE] [-g GRID_LINE_WIDTH] [--max_width MAX_WIDTH]
-                          [--max_height MAX_HEIGHT]
+usage: image_to_stitch.py [-h] [-o OUTPUT_PATH] [-n NUM_CLUSTERS] [-s CELL_SIZE] [-g GRID_LINE_WIDTH] [--width WIDTH]
+                          [--height HEIGHT]
                           image_path
 
 Convert an image into an ASCII art image with black shapes on colored cells.
@@ -48,11 +48,11 @@ options:
   -o OUTPUT_PATH, --output_path OUTPUT_PATH
                         Path to save the output image
   -n NUM_CLUSTERS, --num_clusters NUM_CLUSTERS
-                        Number of color clusters (shapes)
+                        Number of color clusters
+  -s CELL_SIZE, --cell_size CELL_SIZE
+                        Size of each cell in pixels, when editing the pattern.
   -g GRID_LINE_WIDTH, --grid_line_width GRID_LINE_WIDTH
-                        Width of grid lines in pixels
-  --max_width MAX_WIDTH
-                        Maximum width of the image in pixels
-  --max_height MAX_HEIGHT
-                        Maximum height of the image in pixels
+                        Width of grid lines in pixels, when editing the pattern
+  --width WIDTH         Resize the image to the specified width before generating the pattern
+  --height HEIGHT       Resize the image to the specified height before generating the pattern
 ```
