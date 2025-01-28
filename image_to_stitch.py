@@ -7,165 +7,117 @@ from tkinter import filedialog, messagebox
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageTk
-from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+
+SHAPES = list("■▲●◆♥♣♠☼★☆ABCDEFGHIJGLMNOPQRSTUVWXYZ0123456789")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert an image into an ASCII art image with black shapes on colored cells."
-    )
-    parser.add_argument("image_path", help="Path to the input image")
-    parser.add_argument(
-        "-o",
-        "--output_path",
-        help="Path to save the output image",
-        default="output_image.png",
-    )
-    parser.add_argument(
-        "-n",
-        "--num_clusters",
-        type=int,
-        default=10,
-        help="Number of color clusters (shapes)",
-    )
-    parser.add_argument(
-        "-s", "--cell_size", type=int, default=20, help="Size of each cell in pixels"
-    )
-    parser.add_argument(
-        "-g",
-        "--grid_line_width",
-        type=int,
-        default=1,
-        help="Width of grid lines in pixels",
-    )
-    parser.add_argument(
-        "--max_width", type=int, default=80, help="Maximum width of the image in pixels"
-    )
-    parser.add_argument(
-        "--max_height",
-        type=int,
-        default=80,
-        help="Maximum height of the image in pixels",
-    )
-    args = parser.parse_args()
+    args = parse_args()
 
     image_path = args.image_path
     output_path = args.output_path
     N = args.num_clusters
     cell_size = args.cell_size
     grid_line_width = args.grid_line_width
-    max_size = (args.max_width, args.max_height)
 
-    # Load image
     image = Image.open(image_path)
-    # Convert to RGB if necessary
     if image.mode != "RGB":
         image = image.convert("RGB")
-    # Resize image
-    image.thumbnail(max_size, Image.LANCZOS)
-    # Get pixel data
+
+    print(f"Input image size is: {image.size}")
+
+    if args.max_width > 0 and args.max_height > 0:
+        max_size = (args.max_width, args.max_height)
+        print(f"resizing image to {max_size}")
+        image = image.resize(max_size)
+        image.save("resized_image.png")
+        print("resized image saved to resized_image.png for reference")
+    else:
+        print("using input image size")
+
     pixel_data = np.array(image)
     h, w, _ = pixel_data.shape
     pixels = pixel_data.reshape(-1, 3)
-    # Cluster colors
-    kmeans = KMeans(n_clusters=N)
-    kmeans.fit(pixels)
-    labels = kmeans.labels_
-    predicted_clusters = kmeans.predict(pixels)
-    cluster_centers = kmeans.cluster_centers_.astype(int)
-    new_pixels = kmeans.cluster_centers_[predicted_clusters]
 
-    shapes = [
-        "■",
-        "▲",
-        "●",
-        "◆",
-        "♥",
-        "♣",
-        "♠",
-        "☼",
-        "☯",
-        "☮",
-        "☁",
-        "✈",
-        "✉",
-        "☏",
-        "☣",
-        "☢",
-        "♻",
-        "✝",
-        "✡",
-        "☪",
-        "☭",
-        "★",
-        "☆",
-        "☹",
-        "☺",
-        "☻",
-        "✌",
-        "✋",
-        "✊",
-        "✋",
-        "✌",
-    ]
-    if len(shapes) < N:
-        print(f"Not enough shapes ({len(shapes)}) for {N} clusters.")
+    gmm = GaussianMixture(n_components=N, covariance_type="full")
+    gmm.fit(pixels)
+
+    predicted_clusters = gmm.predict(pixels)
+    labels = gmm.fit_predict(pixels)
+
+    cluster_medians = np.zeros(
+        (N, pixels.shape[1]), dtype=int
+    )  # Initialize median storage
+
+    for cluster in range(N):
+        cluster_points = pixels[
+            predicted_clusters == cluster
+        ]  # Get all points in cluster
+        if len(cluster_points) > 0:
+            cluster_medians[cluster] = np.median(cluster_points, axis=0).astype(
+                int
+            )  # Compute median
+
+    new_pixels = cluster_medians[predicted_clusters]
+
+    if len(SHAPES) < N:
+        print(f"Not enough shapes ({len(SHAPES)}) for {N} clusters.")
         sys.exit(1)
-    shapes = shapes[:N]
+    shapes = SHAPES[:N]
+
     cluster_shapes = {i: shapes[i] for i in range(N)}
-    # Reshape labels and pixels to image shape
+
     labels_2d = labels.reshape(h, w)
     new_pixels_2d = new_pixels.reshape(h, w, 3)
-    # Create output image
+
     output_width = w * cell_size + (w + 1) * grid_line_width
     output_height = h * cell_size + (h + 1) * grid_line_width
     output_image = Image.new("RGB", (output_width, output_height), "white")
     draw = ImageDraw.Draw(output_image)
-    # Load font
-    font_size = cell_size - 4  # Adjust font size to fit within the cell
+
+    font_size = cell_size - 4
     try:
         font = ImageFont.truetype("DejaVuSansMono.ttf", font_size)
     except IOError:
         # If the font is not found, use the default font
         font = ImageFont.load_default()
-    # Draw cells and shapes
+
     for i in range(h):
         for j in range(w):
-            # Calculate position
             x = j * (cell_size + grid_line_width) + grid_line_width
             y = i * (cell_size + grid_line_width) + grid_line_width
-            # Get cluster label
+
             label = labels_2d[i, j]
-            # Get shape
-            shape = cluster_shapes[label]
-            # Get pixel color
+
+            shape = cluster_shapes[int(label)]
+
             color = tuple(new_pixels_2d[i, j].astype(int))
-            # Fill the cell with the pixel color
             draw.rectangle([x, y, x + cell_size, y + cell_size], fill=color)
-            # Draw shape in black
+
             text_len = draw.textlength(shape, font=font)
             text_x = x + (cell_size - text_len) / 2
             text_y = y + (cell_size - text_len) / 2
             draw.text((text_x, text_y), shape, fill="black", font=font)
-    # Draw grid lines
+
     for i in range(h + 1):
         y = i * (cell_size + grid_line_width)
         draw.line([(0, y), (output_width, y)], fill="black", width=grid_line_width)
     for j in range(w + 1):
         x = j * (cell_size + grid_line_width)
         draw.line([(x, 0), (x, output_height)], fill="black", width=grid_line_width)
-    # Save output image
+
     output_image.save(output_path)
     print(f"Output image saved to {output_path}")
 
     root = tk.Tk()
-    app = ImageEditorApp(
+    ImageEditorApp(
         root,
         output_path,
         args.cell_size,
         args.grid_line_width,
         cluster_shapes,
-        cluster_centers,
+        cluster_medians,
         font,
     )
     root.mainloop()
@@ -184,51 +136,50 @@ class ImageEditorApp:
     ):
         self.master = master
         self.master.title("ASCII Image Editor")
-
         self.cell_size = cell_size
         self.grid_line_width = grid_line_width
 
-        # Load the image
         self.image = Image.open(image_path)
         self.draw = ImageDraw.Draw(self.image)
         self.image_data = np.array(self.image)
         self.h, self.w, _ = self.image_data.shape
 
-        # Get unique squares (colors)
         self.unique_colors = cluster_centers
         self.cluster_shapes = cluster_shapes
         self.selected_color = None
         self.font = font
 
-        # Create the UI
         self.create_ui()
 
     def create_ui(self):
-        # Create the legend
         self.legend_frame = tk.Frame(self.master)
         self.legend_frame.pack(side=tk.LEFT, fill=tk.Y)
-
         legend_label = tk.Label(self.legend_frame, text="Legend", font=("Arial", 14))
         legend_label.pack(pady=5)
-
         self.legend_canvas = tk.Canvas(self.legend_frame, width=100)
         self.legend_canvas.pack(side=tk.LEFT, fill=tk.Y)
-
         self.create_legend()
 
-        # Create the image canvas
         self.canvas_frame = tk.Frame(self.master)
         self.canvas_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.canvas = tk.Canvas(self.canvas_frame)
+        self.xscrollbar = tk.Scrollbar(
+            self.canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview
+        )
+        self.yscrollbar = tk.Scrollbar(
+            self.canvas_frame, orient=tk.VERTICAL, command=self.canvas.yview
+        )
+        self.canvas.configure(
+            xscrollcommand=self.xscrollbar.set, yscrollcommand=self.yscrollbar.set
+        )
+        self.xscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.yscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         self.draw_image()
 
-        # Bind click event
         self.canvas.bind("<Button-1>", self.on_canvas_click)
-
-        # Add save button
         self.save_button = tk.Button(
             self.master, text="Save Image", command=self.save_image
         )
@@ -275,14 +226,13 @@ class ImageEditorApp:
         if self.selected_color is None:
             return
 
-        x = event.x
-        y = event.y
+        # Adjust for scroll position
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
 
-        # Calculate the cell coordinates
         cell_x = int(x / (self.cell_size + self.grid_line_width))
         cell_y = int(y / (self.cell_size + self.grid_line_width))
 
-        # Calculate the pixel coordinates in the image
         img_x = cell_x * (self.cell_size + self.grid_line_width) + self.grid_line_width
         img_y = cell_y * (self.cell_size + self.grid_line_width) + self.grid_line_width
 
@@ -290,8 +240,7 @@ class ImageEditorApp:
             [img_x, img_y, img_x + self.cell_size, img_y + self.cell_size],
             fill=rgb_to_hex(self.selected_color),
         )
-        # Draw shape in black
-        print(self.selected_shape)
+
         text_len = self.draw.textlength(self.selected_shape, font=self.font)
         text_x = img_x + (self.cell_size - text_len) / 2
         text_y = img_y + (self.cell_size - text_len) / 2
@@ -329,6 +278,46 @@ class ImageEditorApp:
                 )
             self.image.save(file_path)
             messagebox.showinfo("Image Saved", f"Image saved to {file_path}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Convert an image into an ASCII art image with black shapes on colored cells."
+    )
+    parser.add_argument("image_path", help="Path to the input image")
+    parser.add_argument(
+        "-o",
+        "--output_path",
+        help="Path to save the output image",
+        default="output_image.png",
+    )
+    parser.add_argument(
+        "-n",
+        "--num_clusters",
+        type=int,
+        default=24,
+        help="Number of color clusters (shapes)",
+    )
+    parser.add_argument(
+        "-s", "--cell_size", type=int, default=10, help="Size of each cell in pixels"
+    )
+    parser.add_argument(
+        "-g",
+        "--grid_line_width",
+        type=int,
+        default=1,
+        help="Width of grid lines in pixels",
+    )
+    parser.add_argument(
+        "--max_width", type=int, default=0, help="Maximum width of the image in pixels"
+    )
+    parser.add_argument(
+        "--max_height",
+        type=int,
+        default=0,
+        help="Maximum height of the image in pixels",
+    )
+    return parser.parse_args()
 
 
 def rgb_to_hex(rgb):
